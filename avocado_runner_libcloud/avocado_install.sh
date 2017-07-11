@@ -1,6 +1,7 @@
 #!/bin/sh -e
 
 if test -n "$(command -v yum)"; then
+	yum install -y epel-release
 	yum install -y python-pip git
 elif test -n "$(command -v apt-get)"; then
 	apt-get update
