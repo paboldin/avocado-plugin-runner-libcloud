@@ -189,7 +189,7 @@ class LibCloudTestRunner(RemoteTestRunner):
         try:
             self.node = libcloud_create_node(args)
         except LibcloudError as exception:
-            raise exceptions.JobError(exception.message)
+            raise exceptions.JobError(exception.message or str(exception))
 
         # If hostname wasn't given, let's try to find out the IP address
         libcloud_hostname = self.node.public_ips[0]
