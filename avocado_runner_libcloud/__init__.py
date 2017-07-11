@@ -44,10 +44,10 @@ def _get_username():
         repo = git.Repo(path=__file__, search_parent_directories=True)
         username = repo.config_reader().get('user', 'email')
     except Exception:
-        import getpass
         username = getpass.getuser()
 
     username = username.replace('@', '-at-')
+    username = username.replace('.', '--')
 
     return username
 
@@ -65,6 +65,58 @@ def _generate_name():
         username = _get_username()
 
     return NODENAME_TEMPLATE.format(username=username, uid=uid)
+
+# TODO(pboldin): use polymorphism for that
+def _update_digital_ocean(opts, driver, kwargs):
+
+    def filter_by_id(items, id_or_name):
+        found = [x for x in items if x.id == id_or_name or x.name == id_or_name]
+        if not found:
+            return None, ", ".join([getattr(x, 'name', getattr(x, 'id', None))
+                                    for x in items])
+        return found[0], None
+
+    location, locations = filter_by_id(
+            driver.list_locations(),
+            opts.libcloud_zone)
+    if not location:
+        raise LibcloudError("Can't find location: %s, known: %s" %
+                            (opts.libcloud_zone, locations))
+
+    kwargs['location'] = location
+
+    size, sizes = filter_by_id(
+            driver.list_sizes(),
+            opts.libcloud_size)
+    if not size:
+        raise LibcloudError("Can't find size: %s, known: %s" %
+                            (opts.libcloud_size, sizes))
+    kwargs['size'] = size
+
+    image, images = filter_by_id(
+            driver.list_images(),
+            opts.libcloud_image_id)
+    if not image:
+        raise LibcloudError("Can't find image: %s, known: %s" %
+                            (opts.libcloud_image_id, images))
+    kwargs['image'] = image
+
+    if opts.libcloud_key_file:
+        try:
+            key = driver.get_key_pair(name=_get_username())
+        except Exception:
+            with open(opts.libcloud_key_file, "r") as fh:
+                key = driver.create_key_pair(_get_username(),
+                                             fh.read())
+        kwargs['ex_ssh_key_ids'] = [ key.extra['id'] ]
+
+def _update_gce(opts, driver, kwargs):
+    kwargs['location'] = driver.zone_dict[opts.libcloud_zone]
+
+    if opts.libcloud_key_file:
+        with open(opts.libcloud_key_file, 'r') as fh:
+            key = '%s:%s' % (opts.libcloud_username, fh.read())
+        kwargs['ex_metadata'] = {'ssh-keys': key}
 
 def libcloud_create_node(opts):
     """
@@ -96,14 +148,18 @@ def libcloud_create_node(opts):
     }
 
     if opts.libcloud_provider == 'GCE':
-        kwargs['location'] = driver.zone_dict[opts.libcloud_gce_zone]
+        _update_gce(opts, driver, kwargs)
 
-        if opts.libcloud_key_file:
-            with open(opts.libcloud_key_file, 'r') as fh:
-                key = '%s:%s' % (opts.libcloud_username, fh.read())
-            kwargs['ex_metadata'] = {'ssh-keys': key}
+    if opts.libcloud_provider == 'DIGITAL_OCEAN':
+        _update_digital_ocean(opts, driver, kwargs)
 
     node = driver.create_node(**kwargs)
+
+    node, dummy = driver.wait_until_running(
+            nodes=[node],
+            wait_period=3,
+            timeout=60,
+            ssh_interface='public_ips')[0]
 
     return node
 
@@ -264,5 +320,5 @@ class LibCloudCLI(CLI):
 
     def run(self, args):
         if self._check_required_args(args,
-                'libcloud_provider', ('libcloud_provider', 'libcloud_client_id', 'libcloud_client_key')):
+                'libcloud_provider', ('libcloud_provider', 'libcloud_client_id',)):
             args.test_runner = LibCloudTestRunner
