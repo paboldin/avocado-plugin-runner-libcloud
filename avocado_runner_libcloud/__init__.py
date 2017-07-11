@@ -216,9 +216,15 @@ class LibCloudTestRunner(RemoteTestRunner):
         if not stdout_claimed_by:
             self.job.log.info("EXECUTING  : /tmp/avocado_install.sh")
 
-        result = self.remote.run('sh -x /tmp/avocado_install.sh', quiet=False)
-        self.job.log.info(result.stdout)
-        self.job.log.info(result.stderr)
+        result = self.remote.run('sh -x /tmp/avocado_install.sh', quiet=False,
+                                 ignore_status=True, timeout=120)
+        if result.failed:
+            self.job.log.error(result.stdout)
+            self.job.log.error(result.stderr)
+            raise exceptions.JobError("avocado installation failed")
+        else:
+            self.job.log.debug(result.stdout)
+            self.job.log.debug(result.stderr)
 
     def tear_down(self):
         """
