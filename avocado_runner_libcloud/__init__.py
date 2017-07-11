@@ -184,52 +184,62 @@ class LibCloudCLI(CLI):
     name = 'libcloud'
     description = "LibCloud options for 'run' subcommand"
 
+    def add_argument(self, argument, **kwargs):
+        key = argument.replace('--libcloud-', '')
+        default = settings.get_value(
+                'libcloud', key, key_type=kwargs.get('type', str),
+                default=kwargs.get('default', None))
+        if default is not None:
+            kwargs['default'] = default
+        #LOG_UI.error("%s %s" % (argument, kwargs))
+        self.parser.add_argument(argument, **kwargs)
+
     def configure(self, parser):
         run_subcommand_parser = parser.subcommands.choices.get('run', None)
         if run_subcommand_parser is None:
             return
 
         msg = 'test execution on a LibCloud compute'
-        parser = run_subcommand_parser.add_argument_group(msg)
-        parser.add_argument('--libcloud-provider',
-                            help=('Specify LibCloud Provider'))
-        parser.add_argument('--libcloud-client-id',
-                            help=('Specify LibCloud Client ID'))
-        parser.add_argument('--libcloud-client-key',
+        self.parser = run_subcommand_parser.add_argument_group(msg)
+        self.add_argument('--libcloud-provider',
+                          help=('Specify LibCloud Provider'))
+        self.add_argument('--libcloud-client-id',
+                          help=('Specify LibCloud Client ID'))
+        self.add_argument('--libcloud-client-key',
                             help=('Specify LibCloud Client key'))
-        parser.add_argument('--libcloud-name', default=None,
-                            help=('Specify LibCloud compute name'))
-        parser.add_argument('--libcloud-size', default=None,
-                            help=('Specify LibCloud size. Default: %(default)s'))
-        parser.add_argument('--libcloud-image-id',
-                            help=('Specify LibCloud image ID.'))
-        parser.add_argument('--libcloud-gce-zone',
-                            help=('Specify LibCloud zone for GCE provider'))
-        parser.add_argument('--libcloud-gce-project',
-                            help=('Specify LibCloud project for GCE provider'))
+        self.add_argument('--libcloud-name', default=None,
+                          help=('Specify LibCloud compute name'))
+        self.add_argument('--libcloud-size', default=None,
+                          help=('Specify LibCloud size. Default: %(default)s'))
+        self.add_argument('--libcloud-image-id',
+                          help=('Specify LibCloud image ID.'))
+        self.add_argument('--libcloud-zone',
+                          help=('Specify LibCloud zone for some providers'))
+        self.add_argument('--libcloud-gce-project',
+                          help=('Specify LibCloud project for GCE provider'))
 
-        parser.add_argument('--libcloud-port',
-                            default=22, type=int,
-                            help=('Specify the SSH port number to login on '
-                                  'VM. Default: %(default)s'))
-        parser.add_argument('--libcloud-username', default='root',
-                            help=('Specify the username to login on VM. '
-                                  'Default: %(default)s'))
-        parser.add_argument('--libcloud-password',
-                            default=None,
-                            help='Specify the password to login on VM')
-        parser.add_argument('--libcloud-key-file',
-                            dest='libcloud_key_file', default=None,
-                            help=('Specify an identity file with '
-                                  'a private key instead of a password '
-                                  '(Example: .pem files from Amazon EC2)'))
-        parser.add_argument('--libcloud-keep-node', default=False)
-        parser.add_argument('--libcloud-timeout', metavar='SECONDS',
-                            default=120, type=int,
-                            help=("Amount of time (in seconds) to "
-                                  "wait for a successful connection"
-                                  " to the libcloud VM. Defaults"
-                                  " to %(default)s seconds."))
+        self.add_argument('--libcloud-port',
+                          default=22, type=int,
+                          help=('Specify the SSH port number to login on '
+                                'VM. Default: %(default)s'))
+        self.add_argument('--libcloud-username', default='root',
+                          help=('Specify the username to login on VM. '
+                                'Default: %(default)s'))
+        self.add_argument('--libcloud-password',
+                          default=None,
+                          help='Specify the password to login on VM')
+        self.add_argument('--libcloud-key-file',
+                          dest='libcloud_key_file', default=None,
+                          help=('Specify an identity file with '
+                                'a private key instead of a password '
+                                '(Example: .pem files from Amazon EC2)'))
+        self.add_argument('--libcloud-keep-node', default=False)
+        self.add_argument('--libcloud-timeout', metavar='SECONDS',
+                          default=120, type=int,
+                          help=("Amount of time (in seconds) to "
+                                "wait for a successful connection"
+                                " to the libcloud VM. Defaults"
+                                " to %(default)s seconds."))
 
     @staticmethod
     def _check_required_args(args, enable_arg, required_args):
