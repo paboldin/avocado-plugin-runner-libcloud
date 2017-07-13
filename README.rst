@@ -31,7 +31,7 @@ Use it now, for instance, with the Google Compute Engine:
         --libcloud-client-key <YOUR_GCE_CLIENT_KEY>                     \
         --libcloud-gce-project <YOUR_GCE_PROJECT>                       \
         --libcloud-key-file <YOUR_PUBLIC_SSH_KEY_PATH>                  \
-        --libcloud-gce-zone us-east1-b                                  \
+        --libcloud-zone us-east1-b                                      \
         --libcloud-image-id ubuntu-1604-xenial-v20170619a               \
         --libcloud-size n1-standard-2 /bin/true
 
