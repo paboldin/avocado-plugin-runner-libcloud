@@ -16,113 +16,18 @@
 # Authors: Ruda Moura <rmoura@redhat.com>
 #          Cleber Rosa <crosa@redhat.com>
 
-import getpass
 import os
-import random
-import string
 import sys
 
 from libcloud.common.types import LibcloudError
-import libcloud.compute.types as lctypes
-import libcloud.compute.providers as lcproviders
 
 from avocado.core import exit_codes, exceptions
 from avocado.core.output import LOG_UI
 from avocado.core.plugin_interfaces import CLI
 from avocado.core.settings import settings
-from avocado.core.settings import SettingsError
 from avocado_runner_remote import RemoteTestRunner
 
-NODENAME_TEMPLATE = 'avocado-{username}-{uid}'
-
-
-def _username_from_repo(repo_path):
-    try:
-        import git
-        repo = git.Repo(path=repo_path, search_parent_directories=True)
-        username = repo.config_reader().get('user', 'email')
-    except:
-        username = None
-    return username
-
-
-def _get_username():
-    try:
-        username = settings.get_value('libcloud', 'username', None)
-    except SettingsError:
-        username = None
-    # try to get username from test repository
-    username = username or _username_from_repo(os.getcwd())
-    # try to get username from avocado_runner_libcloud repository
-    username = username or _username_from_repo(__file__)
-    # fallback to username in system
-    username = username or getpass.getuser()
-
-    username = username.replace('@', '-at-')
-    username = username.replace('.', '--')
-
-    return username
-
-
-def _generate_instance_name():
-    # random component
-    rnd = random.SystemRandom()
-    uid = ''.join(rnd.sample(string.ascii_lowercase + string.digits, 8))
-    username = _get_username()
-    return NODENAME_TEMPLATE.format(username=username, uid=uid)
-
-
-# TODO(pboldin): use polymorphism for that
-def _update_digital_ocean(opts, driver, kwargs):
-    def filter_by_id(items, id_or_name):
-        found = [x for x in items if id_or_name in (x.name, x.id)]
-        if not found:
-            return None, ", ".join([getattr(x, 'name', getattr(x, 'id', None))
-                                    for x in items])
-        return found[0], None
-
-    location, locations = filter_by_id(
-            driver.list_locations(),
-            opts.libcloud_zone)
-    if not location:
-        raise LibcloudError("Can't find location: %s, known: %s" %
-                            (opts.libcloud_zone, locations))
-
-    kwargs['location'] = location
-
-    size, sizes = filter_by_id(
-            driver.list_sizes(),
-            opts.libcloud_size)
-    if not size:
-        raise LibcloudError("Can't find size: %s, known: %s" %
-                            (opts.libcloud_size, sizes))
-    kwargs['size'] = size
-
-    image, images = filter_by_id(
-            driver.list_images(),
-            opts.libcloud_image_id)
-    if not image:
-        raise LibcloudError("Can't find image: %s, known: %s" %
-                            (opts.libcloud_image_id, images))
-    kwargs['image'] = image
-
-    if opts.libcloud_key_file:
-        try:
-            key = driver.get_key_pair(name=_get_username())
-        except Exception:
-            with open(opts.libcloud_key_file, "r") as fh:
-                key = driver.create_key_pair(_get_username(),
-                                             fh.read())
-        kwargs['ex_ssh_key_ids'] = [key.extra['id']]
-
-
-def _update_gce(opts, driver, kwargs):
-    kwargs['location'] = driver.zone_dict[opts.libcloud_zone]
-
-    if opts.libcloud_key_file:
-        with open(opts.libcloud_key_file, 'r') as fh:
-            key = '%s:%s' % (opts.libcloud_username, fh.read())
-        kwargs['ex_metadata'] = {'ssh-keys': key}
+from avocado_runner_libcloud.node_runner import get_node_runner
 
 
 class LibCloudTestRunner(RemoteTestRunner):
@@ -134,6 +39,8 @@ class LibCloudTestRunner(RemoteTestRunner):
         super(LibCloudTestRunner, self).__init__(job, result)
         #: LibCloud Node used during testing
         self.node = None
+        self.node_runner = get_node_runner(job.args.libcloud_provider,
+                                           cli_args=job.args)
 
     def setup(self):
         """
@@ -206,46 +113,7 @@ class LibCloudTestRunner(RemoteTestRunner):
         :param args: specific arguments
         :return: an instance of :class:`libcloud.Node`
         """
-        opts = self.job.args
-        driver = self._get_driver()
-
-        kwargs = {
-            'name': opts.libcloud_name or _generate_instance_name(),
-            'size': opts.libcloud_size,
-            'image': opts.libcloud_image_id,
-        }
-
-        if opts.libcloud_provider == 'GCE':
-            _update_gce(opts, driver, kwargs)
-        elif opts.libcloud_provider == 'DIGITAL_OCEAN':
-            _update_digital_ocean(opts, driver, kwargs)
-
-        node = driver.create_node(**kwargs)
-
-        node, dummy = driver.wait_until_running(
-            nodes=[node],
-            wait_period=3,
-            timeout=60,
-            ssh_interface='public_ips')[0]
-
-        return node
-
-    def _get_driver(self):
-        args = self.job.args
-        try:
-            driver_cls = lcproviders.get_driver(
-                getattr(lctypes.Provider, args.libcloud_provider))
-        except AttributeError:
-            raise LibcloudError("Can't find libcloud provider %s" %
-                                args.libcloud_provider)
-
-        driver_args = (args.libcloud_client_id, args.libcloud_client_key)
-        driver_kwargs = {}
-
-        if args.libcloud_provider == 'GCE':
-            driver_kwargs['project'] = args.libcloud_gce_project
-
-        return driver_cls(*driver_args, **driver_kwargs)
+        return self.node_runner.create_node()
 
 
 class LibCloudCLI(CLI):
