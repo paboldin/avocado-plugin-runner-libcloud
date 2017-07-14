@@ -23,7 +23,9 @@ setup(name='avocado-framework-plugin-runner-libcloud',
       author_email='pboldin@cloudlinux.com',
       packages=find_packages(),
       include_package_data=True,
-      install_requires=['avocado-framework-plugin-runner-remote', 'apache-libcloud'],
+      install_requires=['avocado-framework',
+                        'avocado-framework-plugin-runner-remote',
+                        'apache-libcloud'],
       entry_points={
           'avocado.plugins.cli': [
               'libcloud = avocado_runner_libcloud:LibCloudCLI',
